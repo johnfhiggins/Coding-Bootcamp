@@ -156,5 +156,3 @@ root_finder(f_x2, f_pr2, 8, 0.0001, 10000)
 
 
 ##problem 7
-
-e
