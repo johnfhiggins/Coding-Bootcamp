@@ -123,3 +123,38 @@ for (index, a) in enumerate(a_list)
 end
 mean_plot = plot(a_list, a_mean, seriestype = :scatter, title="Plot of mean of T_0 for selected alphas", xlabel="alpha", ylabel="mean T_0")
 savefig(mean_plot, "mean_plot.png")
+
+##problem 6
+function f_x(x)
+    return (x-1)^3
+end
+function f_pr(x)
+    return 3*(x-1)^2
+end
+
+function f_x2(x)
+    return 10 + x - x^2
+end
+
+function f_pr2(x)
+    return 1-2x
+end
+
+function root_finder(f, f_prime, x_0, tol, maxiter)
+    x = x_0
+    t = 1
+    while (f(x))/(f_prime(x)) > tol && t <= maxiter
+        x = x - (f(x))/(f_prime(x))
+        println(x)
+        t+=1
+    end
+    return x
+end
+
+root_finder(f_x, f_pr, 2, 0.0001, 1000)
+root_finder(f_x2, f_pr2, 8, 0.0001, 10000)
+
+
+##problem 7
+
+e
