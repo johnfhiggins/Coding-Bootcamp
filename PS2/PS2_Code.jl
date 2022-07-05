@@ -182,16 +182,34 @@ function next_highest(x_arr::Vector{Float64}, x::Float64)
 end
 
 function lin_approx(f, a::Float64, b::Float64, n::Int64, x::Float64)
-    #create domain and empty array for the function values
-    x_grid = collect(range(a, length = n , stop= b))
-    z_grid = eval_func(f,x_grid)
-    x_high, i_high = next_highest(x_grid, x)
-    println(x_grid)
-    x_low = x_grid[Int(i_high-1)]
-    x_interp = (x_low + x_high)/2
-    x_interp
+    if x <= a
+        val = f(a)
+        return val
+    elseif x >= b
+        val = f(b)
+        return val
+    else
+        #create domain and empty array for the function values
+        x_grid = collect(range(a, length = n , stop= b))
+        z_grid = eval_func(f,x_grid)
+        x_high, i_high = next_highest(x_grid, x)
+        x_low = x_grid[Int(i_high-1)]
+        x_interp = ((x-x_low)/(x_high - x_low))*f(x_high) + ((x_high-x)/(x_high - x_low))*f(x_low)
+        return x_interp
+    end
 end
 
 f(x) = x^2
 
-lin_approx(f, 0.0, 2.0, 10, 1.2)
+lin_approx(f, 0.0, 20.0, 10, 1.3)
+
+fine_x = collect(0.0:0.1:20.0)
+nx = length(fine_x)
+fine_z = zeros(nx)
+fine_z_act = zeros(nx)
+for i=1:nx
+    fine_z[i] = lin_approx(f, 0.0, 20.0, 10, fine_x[i])
+    fine_z_act[i] = f(fine_x[i])
+end
+using Plots
+plot(fine_x, fine_z)
