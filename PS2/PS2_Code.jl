@@ -77,4 +77,35 @@ plot_2a_cont = Plots.contourf(x_grid, x_grid, z_grid, seriescolor=:viridis)
 savefig(plot_2a_surf, "plot2a_surf.png")
 savefig(plot_2a_cont, "plot2a_cont.png")
 
-opt = optimize(Ackley, [0,0])
+
+#initialize array of guesses to try
+guesses = [[0.1, 0.1], [2,1], [2, 1.5],[0, 1], [2,2], [2.2,2.2], [3,3.2]]
+#loop through guesses in array
+for guess in guesses
+    println(guess)
+    #run both optimization algorithms
+    opt_nm = optimize(Ackley, guess)
+    opt_lb = optimize(Ackley, guess, LBFGS())
+    #print results
+    println("NM",opt_nm.minimizer, opt_nm.iterations)
+    println("LBFGS",opt_lb.minimizer, opt_lb.iterations)
+end
+
+##problem 3
+function Rastrigin(vec::Vector{Float64})
+    val = 10*length(vec)
+    for x_i in vec
+        val += x_i^2 - 10*cos(2*pi*x_i)
+    end
+    val
+end
+
+x_grid = collect(-5.12:0.01:5.12)
+nx = length(x_grid)
+z_grid = zeros(nx)
+for i=1:nx
+    z_grid[i] = Rastrigin([x_grid[i]])
+end
+
+plot_3a = plot(x_grid, z_grid)
+plo
