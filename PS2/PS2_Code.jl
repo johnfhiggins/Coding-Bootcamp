@@ -162,15 +162,6 @@ for guess in guesses
 end
 
 ##problem 4
-function eval_func(f, x_arr::Vector{Float64})
-    nx = length(x_arr)
-    z_grid = zeros(nx)
-    for i=1:nx #loop over domain
-        z_grid[i] = f(x_arr[i]) #fill in function values
-    end
-    z_grid
-end
-
 function next_highest(x_arr::Vector{Float64}, x::Float64)
     #create boolean array where 1 indicates x is less than y and 0 if y is less than x
     compare_arr = [isless(x,y) for y in x_arr]
@@ -191,7 +182,7 @@ function lin_approx(f, a::Float64, b::Float64, n::Int64, x::Float64)
     else
         #create domain and empty array for the function values
         x_grid = collect(range(a, length = n , stop= b))
-        z_grid = eval_func(f,x_grid)
+        z_grid = f.(x_grid) 
         x_high, i_high = next_highest(x_grid, x)
         x_low = x_grid[Int(i_high-1)]
         x_interp = ((x-x_low)/(x_high - x_low))*f(x_high) + ((x_high-x)/(x_high - x_low))*f(x_low)
@@ -201,15 +192,82 @@ end
 
 f(x) = x^2
 
-lin_approx(f, 0.0, 20.0, 10, 1.3)
+lin_approx(f, 0.0, 2.0, 10, 1.3)
 
-fine_x = collect(0.0:0.1:20.0)
-nx = length(fine_x)
-fine_z = zeros(nx)
-fine_z_act = zeros(nx)
-for i=1:nx
-    fine_z[i] = lin_approx(f, 0.0, 20.0, 10, fine_x[i])
-    fine_z_act[i] = f(fine_x[i])
+
+##problem 5
+function next_highest(x_arr::Vector{Float64}, x::Float64)
+    #create boolean array where 1 indicates x is less than y and 0 if y is less than x
+    compare_arr = [isless(x,y) for y in x_arr]
+    #find index of first y such that x < y
+    i_first = findfirst(compare_arr)
+    #find the corresponding value in x_arr
+    x_first = x_arr[i_first]
+    x_first, Int(i_first)
 end
+
+function lin_approx(f, x_grid::Vector{Float64}, x::Float64)
+    if x <= x_grid[1]
+        val = f(x_grid[1])
+        return val
+    elseif x >= x_grid[length(x_grid)]
+        val = f(x_grid[length(x_grid)])
+        return val
+    else
+        z_grid = f.(x_grid) 
+        x_high, i_high = next_highest(x_grid, x)
+        x_low = x_grid[Int(i_high-1)]
+        x_interp = ((x-x_low)/(x_high - x_low))*f(x_high) + ((x_high-x)/(x_high - x_low))*f(x_low)
+        return x_interp
+    end
+end
+
+function interp_eval(f, x_arr::Vector{Float64})
+    z_arr = f.(x_arr)
+    x_fine = collect(0.0:0.01:100.0)
+    nx = length(x_fine)
+    z_fine_approx = zeros(nx)
+    z_fine_act = f.(x_fine)
+    for i=1:nx
+        z_fine_approx[i] = lin_approx(f, x_arr, x_fine[i])
+    end
+    error = z_fine_act - z_fine_approx
+    z_fine_approx, z_fine_act, error, x_fine
+end
+
+x_even = [0.0, 10.0, 20.0, 30.0, 40.0, 50.0, 60.0, 70.0, 80.0, 90.0, 100.0]
+z_fine_approx, z_fine_act, err, x_fine = interp_eval(f, x_even)
+
 using Plots
-plot(fine_x, fine_z)
+plot(x_fine, [z_fine_approx, z_fine_act, err])
+
+
+function interp_eval_arb(x_arr::Vector{Float64})
+    x_arr_s = sort( union( 0.0, x_arr, 100.0))
+    if x_arr_s[1] < 0.0 || x_arr_s[11] > 100.0
+        return 100000
+    else
+        z_arr = f.(x_arr_s)
+        x_fine = collect(0.0:0.01:100.0)
+        nx = length(x_fine)
+        z_fine_approx = zeros(nx)
+        z_fine_act = f.(x_fine)
+        for i=1:nx
+            z_fine_approx[i] = lin_approx(f, x_arr_s, x_fine[i])
+        end
+        error = z_fine_act - z_fine_approx
+        sum_error = sum(abs.(error))
+        return sum_error
+    end
+end
+
+#x_arb = [5.0, 10.0, 15.0, 20.0, 25.0, 30.0, 35.0, 40.0, 90.0]
+#z_fine_approx, z_fine_act, err, x_fine = interp_eval_arb(f, x_arb)
+#plot(x_fine, [z_fine_approx, z_fine_act, err])
+
+sse = interp_eval_arb(x_arb)
+using Optim
+x_guess = [10.0, 20.0, 30.0, 40.0, 50.0, 60.0, 70.0, 80.0, 90.0]
+opt = optimize(interp_eval_arb, x_guess)
+opt_grid = sort(opt.minimizer)
+sse_opt = interp_eval_arb(opt_grid)
