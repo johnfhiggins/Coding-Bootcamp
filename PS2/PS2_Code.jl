@@ -1,3 +1,5 @@
+cd(dirname(@__FILE__())) 
+
 ##problem 1
 function f(vec::Vector{Float64})
     #break vector input into x and y components
@@ -173,18 +175,24 @@ function next_highest(x_arr::Vector{Float64}, x::Float64)
 end
 
 function lin_approx(f, a::Float64, b::Float64, n::Int64, x::Float64)
+    #check if x is lower than a, return a
     if x <= a
         val = f(a)
         return val
+    #likewise for b
     elseif x >= b
         val = f(b)
         return val
-    else
+    else #for values of x in the interval
         #create domain and empty array for the function values
         x_grid = collect(range(a, length = n , stop= b))
+        #fill in the function values
         z_grid = f.(x_grid) 
+        #find the lowest value in the x grid which is bigger than x, as well as its index
         x_high, i_high = next_highest(x_grid, x)
+        #since x_high is the smallest value which is greater than x, the element which comes before it must be less than or equal to x
         x_low = x_grid[Int(i_high-1)]
+        #find the weighted average of x_high and x_low to get the interpolated value
         x_interp = ((x-x_low)/(x_high - x_low))*f(x_high) + ((x_high-x)/(x_high - x_low))*f(x_low)
         return x_interp
     end
@@ -192,10 +200,12 @@ end
 
 f(x) = x^2
 
+#find interpolation for f at x=1.3 on interval [0,2] with 10 grid points 
 lin_approx(f, 0.0, 2.0, 10, 1.3)
 
 
 ##problem 5
+f(x) = log(x+1)
 function next_highest(x_arr::Vector{Float64}, x::Float64)
     #create boolean array where 1 indicates x is less than y and 0 if y is less than x
     compare_arr = [isless(x,y) for y in x_arr]
@@ -206,43 +216,99 @@ function next_highest(x_arr::Vector{Float64}, x::Float64)
     x_first, Int(i_first)
 end
 
-function lin_approx(f, x_grid::Vector{Float64}, x::Float64)
-    if x <= x_grid[1]
+function lin_approx(f, x_ar::Vector{Float64}, x::Float64)
+    #sort array so that it is ordered 
+    x_grid = sort(x_ar)
+    #check if x lies outside of the boundaries of the grid
+    if x <= x_grid[1] #if x is lower than the lowest point in the grid:
         val = f(x_grid[1])
         return val
-    elseif x >= x_grid[length(x_grid)]
+    elseif x >= x_grid[length(x_grid)] #if x is higher than the highest point in the grid:
         val = f(x_grid[length(x_grid)])
         return val
-    else
-        z_grid = f.(x_grid) 
-        x_high, i_high = next_highest(x_grid, x)
-        x_low = x_grid[Int(i_high-1)]
+    else #if x is within the grid
+        z_grid = f.(x_grid) #fill in the function values at each point of the x_grid
+        x_high, i_high = next_highest(x_grid, x) #find the value in the grid just above x
+        x_low = x_grid[Int(i_high-1)] #find the value in the grid just below x
+        #find the interpolated value using x_low and x_high
         x_interp = ((x-x_low)/(x_high - x_low))*f(x_high) + ((x_high-x)/(x_high - x_low))*f(x_low)
         return x_interp
     end
 end
 
 function interp_eval(f, x_arr::Vector{Float64})
-    z_arr = f.(x_arr)
+    #create fine x grid and find its length 
     x_fine = collect(0.0:0.01:100.0)
     nx = length(x_fine)
+    #create empty grid for interpolated values on the fine grid
     z_fine_approx = zeros(nx)
+    #find the actual function values for each point on the fine grid 
     z_fine_act = f.(x_fine)
+    #loop over x_grid
     for i=1:nx
+        #find the interpolated values for each point and record them in z_fine_approx
         z_fine_approx[i] = lin_approx(f, x_arr, x_fine[i])
     end
+    #find the pointwise interpolation error
     error = z_fine_act - z_fine_approx
+    #return the interpolated values, true values, interpolation error, and the fine grid used 
     z_fine_approx, z_fine_act, error, x_fine
 end
 
+#create evenly spaced grid
 x_even = [0.0, 10.0, 20.0, 30.0, 40.0, 50.0, 60.0, 70.0, 80.0, 90.0, 100.0]
+#find interpolation of f using the above grid and store the required variables for plotting
 z_fine_approx, z_fine_act, err, x_fine = interp_eval(f, x_even)
 
 using Plots
-plot(x_fine, [z_fine_approx, z_fine_act, err])
-
+#create and sove plot
+plot_5a = plot(x_fine, [z_fine_approx, z_fine_act, err], labels=["Interpolation" "Actual" "Error"], title="Linear interpolation, f(x), and error", xlabel="x", ylabel="y")
+savefig(plot_5a, "plot5a.png")
 
 function interp_eval_arb(x_arr::Vector{Float64})
+    #add 0 and 100 and sort the resulting array so that it is ordered
+    x_arr_s = sort( union( 0.0, x_arr, 100.0))
+    #for purposes of optimization in part c, return a very high error value if any values of input array are out of bounds
+    if x_arr_s[1] < 0.0 || x_arr_s[11] > 100.0
+        return 100000
+    else
+        #create x array
+        x_fine = collect(0.0:0.01:100.0)
+        nx = length(x_fine)
+        #initialize blank array for interpolated values
+        z_fine_approx = zeros(nx)
+        #evaluate function for grid points in fine grid
+        z_fine_act = f.(x_fine)
+        #loop over fine array
+        for i=1:nx
+            #find interpolated values for each point in array
+            z_fine_approx[i] = lin_approx(f, x_arr_s, x_fine[i])
+        end
+        #find interpolation error
+        error = z_fine_act - z_fine_approx
+        #find and return sum of the absolute value of interpolation error 
+        sum_error = sum(abs.(error))
+        return sum_error
+    end
+end
+
+x_arb = [5.0, 10.0, 15.0, 20.0, 25.0, 30.0, 35.0, 40.0, 90.0]
+#find interpolation error using the above arbitrary array
+se = interp_eval_arb(x_arb)
+
+using Optim
+x_guess = [10.0, 20.0, 30.0, 40.0, 50.0, 60.0, 70.0, 80.0, 90.0]
+#find interpolation error using the above evenly-spaced starting guess 
+se_guess = interp_eval_arb(x_guess)
+#use Nedler-Mead to find the optimal grid points for interpolation. Our function rejects out-of-bounds guesses by giving a large penalty, and it also sorts the input array so we don't have to worry about checking that the points are in the right order
+opt = optimize(interp_eval_arb, x_guess)
+#find the optimal grid points from the optimization object
+opt_grid = sort(opt.minimizer)
+#find the sum of errors associated with optimal grid points
+se_opt = interp_eval_arb(opt_grid)
+
+#function modified to return the required data for plotting
+function interp_eval_arb_plot(x_arr::Vector{Float64})
     x_arr_s = sort( union( 0.0, x_arr, 100.0))
     if x_arr_s[1] < 0.0 || x_arr_s[11] > 100.0
         return 100000
@@ -257,17 +323,10 @@ function interp_eval_arb(x_arr::Vector{Float64})
         end
         error = z_fine_act - z_fine_approx
         sum_error = sum(abs.(error))
-        return sum_error
+        return z_fine_approx, z_fine_act, error, x_fine
     end
 end
 
-#x_arb = [5.0, 10.0, 15.0, 20.0, 25.0, 30.0, 35.0, 40.0, 90.0]
-#z_fine_approx, z_fine_act, err, x_fine = interp_eval_arb(f, x_arb)
-#plot(x_fine, [z_fine_approx, z_fine_act, err])
-
-sse = interp_eval_arb(x_arb)
-using Optim
-x_guess = [10.0, 20.0, 30.0, 40.0, 50.0, 60.0, 70.0, 80.0, 90.0]
-opt = optimize(interp_eval_arb, x_guess)
-opt_grid = sort(opt.minimizer)
-sse_opt = interp_eval_arb(opt_grid)
+z_fine_approx, z_fine_act, err, x_fine = interp_eval_arb_plot(opt_grid)
+plot_5c = plot(x_fine, [z_fine_approx, z_fine_act, err], labels=["Interpolation" "Actual" "Error"], title="Linear interpolation, f(x), and error (optimal grid)", xlabel="x", ylabel="y")
+savefig(plot_5c, "plot5c.png")
