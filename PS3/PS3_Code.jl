@@ -83,4 +83,5 @@ savefig(hist_20, "hist20.png")
 mean_10
 mean_20
 
-##
+##problem 3
+
