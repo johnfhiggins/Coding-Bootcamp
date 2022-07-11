@@ -84,4 +84,75 @@ mean_10
 mean_20
 
 ##problem 3
+function growth_path(earn::Float64, saved::Float64, prop::Float64, return_seq::Vector{Float64}, raise_seq::Vector{Float64})
+    val = saved
+    for i=1:37
+        #Finds the total amount of current earnings that are saved in this period. I am assuming earnings that are not saved are consumed
+        inv = prop*earn
+        #Add amount invested in period t to the value of the portfolio. I assume earnings are invested at the start of the period - the wording in the question is ambiguous as to whether it is invested at the start or end of the period
+        val += inv
+        #find the value of the portfolio in the next period based on this period's return 
+        val = val*return_seq[i]
+        #find next period's earnings based on this period's raise percent
+        earn = earn*raise_seq[i]
+    end
+    #create boolean variable which determines whether the goal of having 10x of earnings in savings by retirement is attained. I assume that this means 10x of the agent's earnings when they are 67, not 10x of their earnings when they are 30.
+    success = val >= 10*earn
+    val, success
+end
+
+using Random, Distributions
+Random.seed!(0);
+
+function tester_determ(sims::Int64, earn::Float64, saved::Float64, prop::Float64, ret_d::Normal{Float64}, raise_d::Uniform{Float64})
+    vals, successes = growth_path(earn, saved, prop, fill(1.06, 37), fill(1.03, 37))
+    rate = Float64(successes)
+    rate,vals
+end
+
+#parallelize this function
+function tester(sims::Int64, earn::Float64, saved::Float64, prop::Float64, ret_d::ArrayLikeVariate{0}, raise_d::ArrayLikeVariate{0})
+    vals = zeros(sims)
+    successes = zeros(sims)
+    for i=1:sims
+        returns =1 .+ rand(return_dist, 37)
+        raises = 1 .+ rand(raise_dist, 37)
+        vals[i], successes[i] = growth_path(earn, saved, prop, returns, raises)
+    end
+    rate = sum(successes)/sims
+    rate, vals
+end
+
+succ_rate, val_data = tester_determ(1, 100.0, 100.0, 0.37, fill(1.06, 37), fill(1.03, 37))
+
+function binary_searcher(test_func, target::Float64, tol::Float64, sims::Int64, earn::Float64, saved::Float64, ret_d::Normal{Float64}, raise_d::Uniform{Float64})
+    p_guess = 0.5
+    p_low = 0.0
+    p_high = 1.0
+    while abs(p_high - p_guess) >= tol
+        succ_rate, val_data = test_func(sims, earn, saved, p_guess, ret_d, raise_d)
+        if succ_rate >= target
+            println("Too high!", p_guess, succ_rate)
+            p_high = p_guess
+            p_guess = (p_low + p_guess)/2
+        elseif succ_rate < target
+            println("Too low!", p_guess, succ_rate)
+            p_low = p_guess
+            p_guess = (p_high + p_guess)/2
+        end
+    end
+    return p_guess, val_data
+end
+
+return_dist = Normal(0.06, 0.06)
+raise_dist = Uniform(0.0, 0.06)
+binary_searcher(tester_determ, 1.0, 0.0001, 1, 100.0, 100.0, return_dist, raise_dist)
+
+
+
+growth_path(100.0, 100.0, 0.5, returns, raises)
+
+
+#Idea: allow P to change over time (numerical optimization) state vars: time to retirement, current wealth
+
 
