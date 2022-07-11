@@ -121,7 +121,7 @@ end
     rate,vals
 end
 
-#this function is parallelized
+
 @everywhere function tester(sims::Int64, earn::Float64, saved::Float64, prop::Float64, ret_d::Normal{Float64}, raise_d::Uniform{Float64})
     #create empty arrays for the wealth levels and success variable
     vals = zeros(sims)
@@ -139,6 +139,7 @@ end
     rate, vals
 end
 
+#parallelized version of the above function, significant speed improvement for large number of simulations
 @everywhere function tester2(sims::Int64, earn::Float64, saved::Float64, prop::Float64, ret_d::Normal{Float64}, raise_d::Uniform{Float64})
     #create empty arrays for the wealth levels and success variable
     vals = SharedArray{Float64}(sims,1)
