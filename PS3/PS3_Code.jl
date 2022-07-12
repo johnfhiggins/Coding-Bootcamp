@@ -8,8 +8,11 @@ lwage_mat = Matrix(lwage_pre)
 exp2 = lwage_mat[:,3].^2
 lwage = hcat(lwage_mat, exp2)
 
-using Optim, NLSolversBase, Random
-using LinearAlgebra: diag
+using Distributed
+
+addprocs(19)
+@everywhere using Optim, NLSolversBase, Random
+@everywhere using LinearAlgebra: diag
 Random.seed!(0);
 
 n = length(lwage[:,1])
@@ -42,6 +45,68 @@ temp = diag(var_cov_matrix)
 temp1 = temp[1:nvar]
 
 t_stats = β./sqrt.(temp1)
+
+
+function estimator(X_d::Array{Float64}, Y_d::Vector{Float64})
+    n = length(Y_d)
+    nvar = 4
+    func = TwiceDifferentiable(vars -> log_like(X_d, Y_d, vars[1:nvar], vars[nvar + 1]),
+                           ones(nvar+1); autodiff=:forward);
+
+    opt = optimize(func, ones(nvar+1))
+
+    parameters = Optim.minimizer(opt)
+
+    parameters[nvar+1] = exp(parameters[nvar+1])
+
+    β = parameters[1:nvar]
+    β
+end
+
+function bootstrapper(X_d::Array{Float64}, Y_d::Array{Float64}, sims::Int64)    
+    n = length(Y_d)
+    n2 = Int(floor(n/2))
+    b0, b1, b2, b3 = zeros(sims), zeros(sims), zeros(sims), zeros(sims)
+    for j=1:sims
+        Random.seed!(j);
+        selected = rand(1:n, n2)
+        X_b, Y_b = zeros(n2,4), zeros(n2)
+        for i=1:n2
+            ind = selected[i]
+            X_b[i,:] = X_d[ind,:]
+            Y_b[i,:] = Y_d[ind,:]
+        end
+        β_b = estimator(X_b, Y_b)
+        b0[j], b1[j], b2[j], b3[j] = β_b[1], β_b[2], β_b[3], β_b[4]
+        println(j/sims*100, "% complete!")
+    end
+    b0, b1, b2, b3
+end
+
+function bootstrapper_par(X_d::Array{Float64}, Y_d::Array{Float64}, sims::Int64)    
+    n = length(Y_d)
+    n2 = Int(floor(n/2))
+    b0, b1, b2, b3 = zeros(sims), zeros(sims), zeros(sims), zeros(sims)
+    for j=1:sims
+        Random.seed!(j);
+        selected = rand(1:n, n2)
+        X_b, Y_b = zeros(n2,4), zeros(n2)
+        for i=1:n2
+            ind = selected[i]
+            X_b[i,:] = X_d[ind,:]
+            Y_b[i,:] = Y_d[ind,:]
+        end
+        β_b = estimator(X_b, Y_b)
+        b0[j], b1[j], b2[j], b3[j] = β_b[1], β_b[2], β_b[3], β_b[4]
+        println(j/sims*100, "% complete!")
+    end
+    b0, b1, b2, b3
+end
+
+b_0, b_1, b_2, b_3 = bootstrapper(X,Y, 100)
+@elapsed bootstrapper(X,Y, 100)
+
+
 
 #problem 2
 using Plots
@@ -89,9 +154,6 @@ addprocs(5)
 
 @everywhere using SharedArrays, Distributions, Random
 
-#initialize distributions
-return_dist = Normal(0.06, 0.06)
-raise_dist = Uniform(0.0, 0.06)
 Random.seed!(0);
 
 #function which takes initial earnings, savings, and saving rule as well as a sequence of returns and raises and outputs the amount of savings and whether the goal was satisfied
@@ -112,62 +174,71 @@ Random.seed!(0);
     val, success
 end
 
-#function which determines whether the goal is attained in the deterministic setting. Note that in order to use the binary search function for both test functions, I have to pass the distribution functions to this one too. I don't actually use them in this function, and there is probably a more efficient way. I just didn't want to write duplicative functions
-@everywhere function tester_determ(sims::Int64, earn::Float64, saved::Float64, prop::Float64, ret_d::Normal{Float64}, raise_d::Uniform{Float64})
-    #records the wealth level and outcome (note: because it is a deterministic process, only one simulation is needed)
-    vals, successes = growth_path(earn, saved, prop, fill(1.06, 37), fill(1.03, 37))
-    #convert boolean to rate 
-    rate = Float64(successes)
-    rate,vals
-end
 
-
-@everywhere function tester(sims::Int64, earn::Float64, saved::Float64, prop::Float64, ret_d::Normal{Float64}, raise_d::Uniform{Float64})
+@everywhere function tester(determ::Int64, sims::Int64, earn::Float64, saved::Float64, prop::Float64)
     #create empty arrays for the wealth levels and success variable
     vals = zeros(sims)
     successes = zeros(sims)
-    #loop over simulation count
-    for i=1:sims
-        #draw new return and raise sequences following their specified distributions
-        returns =1 .+ rand(return_dist, 37)
-        raises = 1 .+ rand(raise_dist, 37)
-        #store wealth level and outcome in their respective locations
-        vals[i], successes[i] = growth_path(earn, saved, prop, returns, raises)
+    if determ==1
+        vals, successes = growth_path(earn, saved, prop, fill(1.06, 37), fill(1.03, 37))
+        #convert boolean to rate 
+        rate = Float64(successes)
+        return rate,vals
+    else
+        return_dist = Normal(0.06, 0.06)
+        raise_dist = Uniform(0.0, 0.06)
+        #loop over simulation count
+        for i=1:sims
+            #draw new return and raise sequences following their specified distributions
+            returns =1 .+ rand(return_dist, 37)
+            raises = 1 .+ rand(raise_dist, 37)
+            #store wealth level and outcome in their respective locations
+            vals[i], successes[i] = growth_path(earn, saved, prop, returns, raises)
+        end
+        #sum outcomes and divide by number of simulations to get success rate
+        rate = sum(successes)/sims
+        return rate, vals
     end
-    #sum outcomes and divide by number of simulations to get success rate
-    rate = sum(successes)/sims
-    rate, vals
 end
 
 #parallelized version of the above function, significant speed improvement for large number of simulations
-@everywhere function tester2(sims::Int64, earn::Float64, saved::Float64, prop::Float64, ret_d::Normal{Float64}, raise_d::Uniform{Float64})
-    #create empty arrays for the wealth levels and success variable
-    vals = SharedArray{Float64}(sims,1)
-    successes = SharedArray{Float64}(sims,1)
-    #loop over simulation count
-    @sync @distributed for i=1:sims
-        #draw new return and raise sequences following their specified distributions
-        returns =1 .+ rand(return_dist, 37)
-        raises = 1 .+ rand(raise_dist, 37)
-        #store wealth level and outcome in their respective locations
-        vals[i], successes[i] = growth_path(earn, saved, prop, returns, raises)
+@everywhere function tester2(determ::Int64, sims::Int64, earn::Float64, saved::Float64, prop::Float64)
+    #check for whether we want the deterministic process or the random one
+    if determ==1 #if we choose the deterministic process
+        #find the ending wealth level and outcome variable
+        vals, successes = growth_path(earn, saved, prop, fill(1.06, 37), fill(1.03, 37))
+        #convert boolean to float 
+        rate = Float64(successes)
+        return rate,vals
+    elseif determ==0
+        #initialize empty shared arrays 
+        vals = SharedArray{Float64}(sims,1)
+        successes = SharedArray{Float64}(sims,1)
+        #loop over simulation count
+        @sync @distributed for i=1:sims
+            #draw new return and raise sequences following their specified distributions
+            returns =1 .+ rand(return_dist, 37)
+            raises = 1 .+ rand(raise_dist, 37)
+            #store wealth level and outcome in their respective locations
+            vals[i], successes[i] = growth_path(earn, saved, prop, returns, raises)
+        end
+        #sum outcomes and divide by number of simulations to get success rate
+        rate = sum(successes)/sims
+        return rate, vals
     end
-    #sum outcomes and divide by number of simulations to get success rate
-    rate = sum(successes)/sims
-    rate, vals
 end
 
 #@elapsed tester(10000000, 100.0, 100.0, 0.1, return_dist, raise_dist)
 #@elapsed tester2(10000000, 100.0, 100.0, 0.1, return_dist, raise_dist)
 
-@everywhere function binary_searcher(test_func, target::Float64, tol::Float64, sims::Int64, earn::Float64, saved::Float64, ret_d::Normal{Float64}, raise_d::Uniform{Float64})
+@everywhere function binary_searcher(determ::Int64, target::Float64, tol::Float64, sims::Int64, earn::Float64, saved::Float64)
     p_guess = 0.5
     p_low = 0.0
     p_high = 1.0
     #continue until difference between max and guess is lower than the tolerance parameter 
     while abs(p_high - p_guess) >= tol
-        #find the success rate given the current guessed p
-        succ_rate, val_data = test_func(sims, earn, saved, p_guess, ret_d, raise_d)
+        #find the success rate given the current guessed p 
+        succ_rate, val_data = tester2(determ, sims, earn, saved, p_guess)
         if succ_rate >= target #if success rate is too high, revise guess downward
             println("Too high!", p_guess, succ_rate)
             p_high = p_guess
@@ -182,30 +253,37 @@ end
     p_guess
 end
 
+#create distributions
+return_dist = Normal(0.06, 0.06)
+raise_dist = Uniform(0.0, 0.06)
 
 #find savings rate required to achieve the goal in a deterministic setting 
-binary_searcher(tester_determ, 1.0, 0.0000001, 1, 100.0, 100.0, return_dist, raise_dist)
-#find savings rate required to achieve the goal when returns and raises are random
-binary_searcher(tester2, 0.9, 0.0000001, 1000000, 100.0, 100.0, return_dist, raise_dist)
+binary_searcher(1, 1.0, 0.0000001, 1, 100.0, 100.0)
 
 #find probability of attaining goal in random setting using the answer to part a (p = 0.1062)
 tester2(100000000,100.0, 100.0, 0.10626, return_dist, raise_dist)
+
+#find savings rate required to achieve the goal when returns and raises are random
+binary_searcher(0, 0.9, 0.0000001, 1000000, 100.0, 100.0)
+
+
 #plot histogram of wealth using optimal saving rule 
 using Plots
 wealth_hist = histogram(val_data_wrong, title = "Histogram of wealth using P = 0.16957")
 savefig(wealth_hist, "wealthhist.png")
 
 #find probability of attaining goal in random setting using the correct savings level - will be very close to 90% 
-succ_opt, val_data_opt = tester2(1000000,100.0, 100.0, 0.16957, return_dist, raise_dist)
+succ_opt, val_data_opt = tester2(0,1000000,100.0, 100.0, 0.16957)
 
 #creates plot of success rate vs p 
 p_grid = collect(0.0:0.01:1.0)
 np = length(p_grid)
 succ_p = zeros(np)
 for i=1:np
-    succ_vals, val_datas = tester2(1000000,100.0, 100.0, p_grid[i], return_dist, raise_dist)
+    succ_vals, val_datas = tester2(0,1000000,100.0, 100.0, p_grid[i])
     succ_p[i] = succ_vals
 end
+using Plots
 succ_plot = plot(p_grid, succ_p, title= "Success rate as function of P", xlabel="Proportion saved (P)", ylabel="Prob of success")
 savefig(succ_plot, "succ_plot.png")
 #Idea: allow P to change over time (numerical optimization) state vars: time to retirement, current wealth
