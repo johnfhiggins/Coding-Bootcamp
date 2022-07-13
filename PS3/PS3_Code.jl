@@ -1,56 +1,34 @@
-cd(dirname(@__FILE__())) 
+
 ##Problem 1
+
+using Distributed
+addprocs(4)
+@everywhere begin
+cd(dirname(@__FILE__())) 
 using CSV
 using DataFrames
 
-lwage_pre = DataFrame(CSV.File("lwage.csv", header=0, type=Float64))
-lwage_mat = Matrix(lwage_pre)
-exp2 = lwage_mat[:,3].^2
-lwage = hcat(lwage_mat, exp2)
 
-using Distributed
-
-addprocs(19)
-@everywhere using Optim, NLSolversBase, Random
-@everywhere using LinearAlgebra: diag
+using Optim, NLSolversBase, Random, SharedArrays
+using LinearAlgebra: diag
 Random.seed!(0);
 
-n = length(lwage[:,1])
-X = hcat(ones(n), lwage[1:end, 1:end .!= 1])
-Y = lwage[:, 1]
-nvar = 4
 
-function log_like(X, Y, beta, log_sigma)
+function log_like(Xa, Ya, beta, log_sigma)
+    n = length(Ya)
     sig = exp(log_sigma)
-    llike = -n/2*log(2π) - n/2* log(sig^2) - (sum((Y - X * beta).^2) / (2*sig^2))
+    llike = -n/2*log(2π) - n/2* log(sig^2) - (sum((Ya - Xa * beta).^2) / (2*sig^2))
     llike = -llike
-end
+end 
 
-func = TwiceDifferentiable(vars -> log_like(X, Y, vars[1:nvar], vars[nvar + 1]),
-                           ones(nvar+1); autodiff=:forward);
+nvar=4
 
-opt = optimize(func, ones(nvar+1))
-
-parameters = Optim.minimizer(opt)
-
-parameters[nvar+1] = exp(parameters[nvar+1])
-
-numerical_hessian = hessian!(func,parameters)
-
-var_cov_matrix = inv(numerical_hessian)
-
-β = parameters[1:nvar]
-
-temp = diag(var_cov_matrix)
-temp1 = temp[1:nvar]
-
-t_stats = β./sqrt.(temp1)
-
-
-function estimator(X_d::Array{Float64}, Y_d::Vector{Float64})
-    n = length(Y_d)
+end 
+@everywhere function estimator(X_d2::Array{Float64}, Y_d2::Vector{Float64})
+    n = length(Y_d2)
     nvar = 4
-    func = TwiceDifferentiable(vars -> log_like(X_d, Y_d, vars[1:nvar], vars[nvar + 1]),
+    
+    func = TwiceDifferentiable(vars -> log_like(X_d2, Y_d2, vars[1:nvar], vars[nvar + 1]),
                            ones(nvar+1); autodiff=:forward);
 
     opt = optimize(func, ones(nvar+1))
@@ -63,49 +41,127 @@ function estimator(X_d::Array{Float64}, Y_d::Vector{Float64})
     β
 end
 
-function bootstrapper(X_d::Array{Float64}, Y_d::Array{Float64}, sims::Int64)    
+@everywhere function bootstrapper(X_d::Array{Float64}, Y_d::Array{Float64}, sims::Int64)    
     n = length(Y_d)
-    n2 = Int(floor(n/2))
+    #take smaller sample of data because I'm running into memory problems on my desktop
+    n2 = Int(floor(n/10))
+    #assign empty arrays for coefficient estimates
     b0, b1, b2, b3 = zeros(sims), zeros(sims), zeros(sims), zeros(sims)
+    #run bootstrap samples
     for j=1:sims
+        #new random seed
         Random.seed!(j);
+        #choose random selection with replacement from data index range
         selected = rand(1:n, n2)
+        #create empty arrays for bootstrap sample
         X_b, Y_b = zeros(n2,4), zeros(n2)
+        #loop over bootstrap indices
         for i=1:n2
+            #find the i'th element from the random sample
             ind = selected[i]
+            #construct bootstrap samples
             X_b[i,:] = X_d[ind,:]
             Y_b[i,:] = Y_d[ind,:]
         end
+        #estimate model using bootstrap sample
         β_b = estimator(X_b, Y_b)
+        #progress tracking 
+        println(j/sims*100, "% finished!")
+        #assign coefficients to array
         b0[j], b1[j], b2[j], b3[j] = β_b[1], β_b[2], β_b[3], β_b[4]
-        println(j/sims*100, "% complete!")
     end
     b0, b1, b2, b3
 end
 
-function bootstrapper_par(X_d::Array{Float64}, Y_d::Array{Float64}, sims::Int64)    
+@everywhere function bootstrapper_par(X_d::Array{Float64}, Y_d::Array{Float64}, sims::Int64)    
     n = length(Y_d)
-    n2 = Int(floor(n/2))
-    b0, b1, b2, b3 = zeros(sims), zeros(sims), zeros(sims), zeros(sims)
-    for j=1:sims
+    #take smaller sample of data because I'm running into memory problems on my desktop
+    n2 = Int(floor(n/10))
+    #assign empty shared arrays for coefficient estimates
+    b0, b1, b2, b3 = SharedArray{Float64}(sims), SharedArray{Float64}(sims), SharedArray{Float64}(sims), SharedArray{Float64}(sims)
+    #run all bootstrap samples
+    @sync @distributed for j=1:sims
+        #new random seed
         Random.seed!(j);
+        println(j)
+        #choose random selection with replacement from data index range
         selected = rand(1:n, n2)
+        #create empty arrays for bootstrap samples
         X_b, Y_b = zeros(n2,4), zeros(n2)
+        #loop over indices of the bootstrap sample 
         for i=1:n2
+            #find the i'th element from the random sample
             ind = selected[i]
+            #construct bootstrap samples
             X_b[i,:] = X_d[ind,:]
             Y_b[i,:] = Y_d[ind,:]
         end
+        #estimate model with bootstrap sample
         β_b = estimator(X_b, Y_b)
+        #assign coefficients
         b0[j], b1[j], b2[j], b3[j] = β_b[1], β_b[2], β_b[3], β_b[4]
-        println(j/sims*100, "% complete!")
     end
     b0, b1, b2, b3
 end
 
-b_0, b_1, b_2, b_3 = bootstrapper(X,Y, 100)
-@elapsed bootstrapper(X,Y, 100)
+#model estimator using log-likelihood
+function est_model(X_d2::Array{Float64}, Y_d2::Vector{Float64})
+    n = length(Y_d2)
+    nvar = 4
+    
+    func = TwiceDifferentiable(vars -> log_like(X_d2, Y_d2, vars[1:nvar], vars[nvar + 1]),
+                           ones(nvar+1); autodiff=:forward);
 
+    opt = optimize(func, ones(nvar+1))
+
+    parameters = Optim.minimizer(opt)
+
+    parameters[nvar+1] = exp(parameters[nvar+1])
+
+    numerical_hessian = hessian!(func,parameters)
+
+    var_cov_matrix = inv(numerical_hessian)
+
+    β = parameters[1:nvar]
+
+    temp = diag(var_cov_matrix)
+    temp1 = temp[1:nvar]
+
+    t_stats = β./sqrt.(temp1)
+
+    β, t_stats
+end
+
+#import data and make necessary transformations
+lwage_pre = DataFrame(CSV.File("lwage.csv", header=0, types=Float64))
+lwage_mat = Matrix(lwage_pre)
+exp2 = lwage_mat[:,3].^2
+lwage = hcat(lwage_mat, exp2)
+
+#define X and Y matrices
+@everywhere using ParallelDataTransfer
+n = length(lwage[:,1]); sendto(workers(), n=n)
+X = hcat(ones(n), lwage[1:end, 1:end .!= 1]); sendto(workers(), X=X)
+Y = lwage[:, 1]; sendto(workers(), Y=Y)
+nvar = 4
+
+#estimate full model
+coef, t_stat = est_model(X,Y)
+
+#run bootstrap procedure
+@elapsed b_0, b_1, b_2, b_3 = bootstrapper(X,Y, 100)
+@elapsed b_0p, b_1p, b_2p, b_3p = bootstrapper_par(X,Y, 100)
+
+#find standard errors
+using Statistics
+s0 = std(b_0)
+s1 = std(b_1)
+s2= std(b_2)
+s3 = std(b_3)
+s0p = std(b_0p)
+s1p = std(b_1p)
+s2p= std(b_2p)
+s3p = std(b_3p)
 
 
 #problem 2
