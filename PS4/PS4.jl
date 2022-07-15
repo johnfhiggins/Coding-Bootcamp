@@ -1,76 +1,38 @@
 ##problem 1
 
-function add_coin(bal::Int64, coin_add::Array{Int64}, used::Array{Int64})
-    bal -= sum(coin_add)
-    push!(used, coin_add)
-    bal, used
-end
-    
-function new_coin_picker(bal::Int64, coin_list::Array{Int64}, used::Array{Int64})
-    rem_coins = delete!(coin_list, used)
-    for i in rem_coins
-        bal
-    end
-end
-
-function possible_ways(val, coin_init)
-    coin_list = copy(coin_init)
-    options = Int.(floor.(val ./ coin_list)) 
-    count = 0
-    for (i,coin) in enumerate(coin_list)
-        for j in 1:options[i]
-            coin_j = copy(coin_list)
-            if options[i] > 0
-                new = val - coin*j
-                println(val, "-" ,coin, "*", j, "=",  new )
-                if new == 0
-                    count += 1
-                else
-                    deleteat!(coin_j, i)
-                    count += possible_ways(new, coin_j)
-                end
-            end
-        end
-    end
-    return count
-end
-
-using Combinatorics
-function searcher(bal::Int64, used::Array{Int64}, coin_list::Array{Int64}, curr_iter::Int64, results)
-    for vals=1:bal
-        #determine which coins could possibly make change
-        possible_coins = [j for j in coin_list if j <= vals] 
-        candidates = powerset(possible_coins)
-    end
-end
-
-        #unused_possible = delete!(possible_coins, used)
-        
-N=5
-coin_list=[1,2,5]
-
-
 function matrix_fill(N::Int64, coins::Array{Int64})
+    #initialize an empty array of size N+1 x the amount of coins + 1
+    #note: because I need a row of ones at the beginning (so that successful ways of making change get counted), the indices of everything will be shifted up by 1. It's not pretty, but it works
     res = zeros(N+1, length(coins)+1)
+    #create the aforementioned row of ones
     res[1, :] .= 1
+    #sort the list of coins we have, because the way I have written it depends on the list of coins being ordered
     coins = sort(coins)
+    #iteratively fill in the rows of the matrix 
     for val=1:N
+        #iterate over possible coins to use
         for (i, coin) in enumerate(coins)
-            if coin > val
-                res[val+1,i+1] = res[val+1, i]
-            elseif coin == val
-                res[val+1,i+1] = 1 + res[val+1, i]
+            if coin > val #if the coin is larger than the remaining balance
+                res[val+1,i+1] = res[val+1, i] #we cannot make change using this coin, so we use the previous count for the first i-1 coins
+            elseif coin == val #if the coin is exactly the same as the remaining balance
+                res[val+1,i+1] = 1 + res[val+1, i] #use this coin to make exact change and thus we need to increment the current count by 1 
             else
                 #can always make change with the lower denomination coins and ignore the new coin
                 res[val+1,i+1] = res[val+1,i]
-                #find the highest number of the new coin that can be used
+                #find the highest quantity of coin i that can be used 
                 j_range = Int(floor(val/coin))
-                println(val, coin, j_range)
+                #loop over possible multiples of the current coin, up to j_range
                 for j=1:j_range
+                    #add the number of ways to make change for the resulting balance with the first i-1 coins and add to the current entry 
                     res[val+1, i+1] += res[val + 1  - j*coin, i]
                 end
             end
         end
     end
-    res
+    #return the resulting matrix, as well as the total number of ways (it will be the entry in the bottom right corner of the matrix)
+    res, res[N+1, length(coins)+1]
 end 
+
+#find the total amount of ways 
+full_matrix, total_ways = matrix_fill(10, [2,3,5,6])
+total_ways
