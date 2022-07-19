@@ -1,5 +1,121 @@
-##problem 1
+% !TEX program = pdflatex
+% !TEX enableSynctex = true
 
+
+        %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+        \documentclass[12pt]{article}
+        \usepackage[margin=1in]{geometry} 
+        \usepackage[hidelinks]{hyperref}
+       \usepackage{amsmath,amsthm,amssymb,amsfonts, enumitem, fancyhdr, color, comment, graphicx, environ,mathtools, bbm, tikz, setspace, cleveref,listings, dcolumn, xcolor}
+       
+       \usepackage[T1]{fontenc}
+       
+       \usepackage{array, multirow, caption, booktabs}
+       \usepackage{ mathrsfs }
+       \hypersetup{
+           colorlinks,
+           linkcolor={red!50!black},
+           citecolor={blue!50!black},
+           urlcolor={blue!80!black}
+       }
+       \usetikzlibrary{matrix,positioning}
+       \tikzset{bullet/.style={circle,draw=black,inner sep=8pt}}
+       \DeclareMathOperator*{\argmax}{arg\,max}
+       \DeclareMathOperator*{\argmin}{arg\,min}
+       \DeclareMathOperator*{\Var}{\text{Var}}
+       \DeclareMathOperator*{\Cov}{\text{Cov}}
+       
+       \DeclarePairedDelimiter\norm{\lVert}{\rVert}%
+       \newtheorem{theorem}{Theorem}
+       \newtheorem{lemma}[theorem]{Lemma}
+       \DeclareMathOperator{\eps}{\varepsilon}
+       \doublespacing
+       \DeclarePairedDelimiter\abs{\lvert}{\rvert}%
+       \pagestyle{fancy}
+       \setlength{\headheight}{65pt}
+       \newenvironment{problem}[2][Problem]{\begin{trivlist}
+       \item[\hskip \labelsep {\bfseries #1}\hskip \labelsep {\bfseries #2.}]}{\end{trivlist}}
+       \newenvironment{sol}
+           {\emph{Solution:}
+           }
+           {
+           \qed
+           }
+       
+       \lstdefinelanguage{Julia}%
+         {morekeywords={abstract,break,case,catch,const,continue,do,else,elseif,%
+             end,export,false,for,function,immutable,import,importall,if,in,%
+             macro,module,otherwise,quote,return,switch,true,try,type,typealias,%
+             using,while},%
+          sensitive=true,%
+          alsoother={$},%
+          morecomment=[l]\#,%
+          morecomment=[n]{\#=}{=\#},%
+          morestring=[s]{"}{"},%
+          morestring=[m]{'}{'},%
+       }[keywords,comments,strings]%
+       
+       \lstset{%
+           language         = Julia,
+           basicstyle       = \ttfamily,
+           keywordstyle     = \bfseries\color{blue},
+           stringstyle      = \color{magenta},
+           commentstyle     = \color{ForestGreen},
+           showstringspaces = false,
+       }
+       
+       
+       %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+       
+       
+       \usepackage{xcolor}
+        
+       \definecolor{codegreen}{rgb}{0,0.6,0}
+       \definecolor{codegray}{rgb}{0.5,0.5,0.5}
+       \definecolor{codepurple}{rgb}{0.58,0,0.82}
+       \definecolor{backcolour}{rgb}{0.95,0.95,0.92}
+        
+       \lstdefinestyle{mystyle}{
+           backgroundcolor=\color{backcolour},   
+           commentstyle=\color{codegreen},
+           keywordstyle=\color{magenta},
+           numberstyle=\tiny\color{codegray},
+           stringstyle=\color{codepurple},
+           basicstyle=\ttfamily\footnotesize,
+           breakatwhitespace=false,         
+           breaklines=true,                 
+           captionpos=b,                    
+           keepspaces=true,                 
+           numbers=left,                    
+           numbersep=5pt,                  
+           showspaces=false,                
+           showstringspaces=false,
+           showtabs=false,                  
+           tabsize=2
+       }
+        
+       \lstset{style=mystyle}    
+       
+       
+       %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+       
+       \rhead{John Higgins\\Programming Bootcamp \\ 20 July, 2022} 
+       
+       %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+       
+       
+       %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+       
+       \begin{document}
+       \lstset{language=Julia}
+       %%%%%%%%%%%%%%%%%%%%%%
+       Note: All code and plots can be found \href{https://github.com/johnfhiggins/Coding-Bootcamp/tree/main/PS4}{here!}
+       \begin{problem}{1}
+       
+       \end{problem}
+       \begin{sol}
+        Code and putput for problem 1 is included below:
+        \begin{lstlisting}
 function matrix_fill(N::Int64, coins::Array{Int64})
     #initialize an empty array of size N+1 x the amount of coins + 1
     #note: because I need a row of ones at the beginning (so that successful ways of making change get counted), the indices of everything will be shifted up by 1. It's not pretty, but it works
@@ -36,8 +152,15 @@ end
 #find the total amount of ways 
 full_matrix, total_ways = matrix_fill(10, [2,3,5,6])
 total_ways
-
-##problem 2
+>>5.0
+        \end{lstlisting}
+       \end{sol}
+       \begin{problem}{2}
+        
+       \end{problem}
+       \begin{sol}
+        Code and output for problem 2 is included below:
+        \begin{lstlisting}
 #create bellman function for problem: takes rod length N and price vector P
 function rod_bellman(N::Int64, P::Vector{Int64})
     #assign empty policy and value arrays
@@ -89,13 +212,23 @@ end
 
 value_n, cuts = rod_solver( [1,5,8,9,10,17,17,20])
 value_n
+>>22.0
 cuts
+>>[6,2]
 
 value_n, cuts = rod_solver( [1,5,45,9,10,17,17,20])
 value_n
+>>95.0
 cuts
-
-##problem 3
+>>[3,3,2]
+        \end{lstlisting}
+       \end{sol}
+       \begin{problem}{3}
+        
+       \end{problem}
+       \begin{sol}
+        Code and output for problem 3 is included below:
+        \begin{lstlisting}
 #note: I assume item array is ordered by ascending weight
 function knap_bellman(values::Vector{Int64}, weights::Vector{Int64}, C::Int64)
     N = length(values)
@@ -159,7 +292,32 @@ end
 
 #determine value and optimal policies
 knap_bellman([4,3,8], [1,1,2], 3)
+>> 12, [1,3]
 knap_bellman([60,100,120], [10,20,30], 50)
-
-##problem 4
-
+>> 220, [2,3]
+        \end{lstlisting}
+To see how this is a generalization of the problem in part 2, we note that if we set C = 8 and the weight of a rod of length x to be x, then it is exactly the same problem. 
+       \end{sol}
+       \begin{problem}{4}
+        
+       \end{problem}
+       \begin{sol}
+        Suppose there is an infinitely-lived firm with discount factor $\beta$ which faces linear inverse demand $P(q) = a - b q$ in each period, where $q$ is the quantity supplied by the firm. The firm starts with marginal cost $c_0$ in period $t=0$. Each period, the firm can choose to invest in cost-reducing research. Specifically, if their marginal cost is $c_t$ in period $t$, investing $x_t$ dollars in research in period $t$ lowers their marginal cost in period $t+1$ to $c_{t+1} = f(c_t, x_t)$ for some function $f$ which is increasing in $c_t$ and decreasing in $x_t$. We specialize by using $f(c_t, x_t) = \alpha^{x_t} c_t $, where $\alpha \in (0,1)$. The firm's profit in period $t$ is given by
+        \[\pi(q_t, x_t) = (P(q_t) - f(c_{t-1}, x_{t-1}))q_t - x_t\]
+        However, we can consolidate this. If the firm wishes to transition from $c_t$ to $c_{t+1}$, they must pay an adjustment cost of $\Phi(c_{t}, c_{t+1}) = f^{-1}(c_{t}, c_{t+1})= \log_{\alpha}\left(\frac{c_{t+1}}{c_t} \right)$ when $c_{t+1} \geq c_t$ and $\Phi(c_t, c_{t+1}) = 0$ otherwise. Hence, the firm's period-$t$ profit given current cost $c_t$ and next period cost $c_{t+1}$ becomes
+        \[\pi(q_t, c_t, c_{t+1}) = (P(q_t) - c_t)q_t - \Phi(c_t, c_{t+1})\]
+        The firm's problem is thus to choose $\{q_t, c_{t+1}\}_{t=0}^{\infty}$ to solve
+        \[\max_{\{q_t, c_{t+1}\}_{t=0}^{\infty}} \sum_{t=0}^{\infty} \beta^t \left[(P(q_t) - c_t)q_t - \Phi(c_t, c_{t+1})\right]\]
+        subject to the constraints that $q_t, c_{t+1} \geq 0$ $\forall t$ and $c_{0} > 0$.
+        Alternatively, we note that we can express the firm's problem in a recursive manner. The value function of the firm with current cost $c$ is given by 
+        \[V(c) = \max_{q, c'} \left[\pi(q, c, c') + \beta V(c')\right]\]
+        We focus first on the first order condition for $q$. The optimal quantity must solve 
+        \[0 = a - 2bq - c  \iff q = \frac{a -c}{2b}\]
+        This is independent of the choice of $c'$. Thus, a firm with cost $c$ will optimally set $q(c) = \frac{a-c}{2b}$. We can rewrite the firm's Bellman equation as follows:
+        \[V(c) = \max_{c'} \left[\pi(q(c), c, c') + \beta V(c')\right]\]
+        We can see now that this is a fixed point of the contraction mapping $T: f \rightarrow Tf$ where
+        \[(T f)(c) = \max_{c'} \left[ \pi(q(c), c, c') + \beta f(c') \right]\]
+        Thus, we can find the value function through value function iteration. We will do this in Julia.
+       \end{sol}
+       \end{document}
+       
