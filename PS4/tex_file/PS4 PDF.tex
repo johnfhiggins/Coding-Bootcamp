@@ -311,13 +311,157 @@ To see how this is a generalization of the problem in part 2, we note that if we
         subject to the constraints that $q_t, c_{t+1} \geq 0$ $\forall t$ and $c_{0} > 0$.
         Alternatively, we note that we can express the firm's problem in a recursive manner. The value function of the firm with current cost $c$ is given by 
         \[V(c) = \max_{q, c'} \left[\pi(q, c, c') + \beta V(c')\right]\]
-        We focus first on the first order condition for $q$. The optimal quantity must solve 
+        We focus first on the first order condition for $q$. Using that $P(q) = a - bq$, we find that the optimal quantity must solve 
         \[0 = a - 2bq - c  \iff q = \frac{a -c}{2b}\]
         This is independent of the choice of $c'$. Thus, a firm with cost $c$ will optimally set $q(c) = \frac{a-c}{2b}$. We can rewrite the firm's Bellman equation as follows:
         \[V(c) = \max_{c'} \left[\pi(q(c), c, c') + \beta V(c')\right]\]
         We can see now that this is a fixed point of the contraction mapping $T: f \rightarrow Tf$ where
         \[(T f)(c) = \max_{c'} \left[ \pi(q(c), c, c') + \beta f(c') \right]\]
-        Thus, we can find the value function through value function iteration. We will do this in Julia.
+        Thus, we can find the value function through value function iteration. We will do this in Julia. Julia code is included below, as well as graphs of value and policy functions for a selection of parameter values.
+        \begin{center}
+            \includegraphics[scale=0.6]{vfplotbeta=7}
+            \includegraphics[scale=0.6]{vfplotbeta=9}
+            \includegraphics[scale=0.6]{pfplotbeta=7}
+            \includegraphics[scale=0.6]{pfplotbeta=9}
+        \end{center}
+        Notice that, as we would expect, a higher $\alpha$ leads firms to choose a lower cost in the next period (since a lower $\alpha$ makes cost-reduction less expensive). Furthermore, a higher discount factor $\beta$ leads firms to invest more in cost-reduction. We also include a plot showing the evolution of cost over time according to the policy functions we found above. Note that when the discount factor is higher, firms reduce cost quicker and further. When the discount factor is lower, firms are slower to reduce cost and end up reducing it less. We can deduce that the steady state cost is lower for firms which are more forward-looking.
+        \begin{center}
+            \includegraphics[scale=0.6]{costevol6}
+            \includegraphics[scale=0.6]{costevol95}
+        \end{center}
+        \begin{lstlisting}
+    using Parameters, Plots
+
+@with_kw struct Primitives
+    \beta::Float64 = 0.6 #discount rate
+    a::Float64 = 20.0 #demand intercept
+    b::Float64 = 2.0 ##demand slope
+
+    alph::Float64 = 0.95 #research parameter, factor by which marginal cost is reduced
+
+    c0::Float64 = 20.0 #max cost    
+    c_grid::Vector{Float64} = collect(range(0.01, length=500, stop=c0)) #cost grid
+    nc::Int64 = length(c_grid) #number of grid points
+    #grid_gen(c_0, alph, nc)
+end
+mutable struct Results
+    val_func::Array{Float64} #value function
+    pol_func::Array{Float64} #policy function
+end
+
+function adj_cost(ct::Float64, ct1::Float64, alph::Float64)
+    rat = ct1/ct #find ratio of future c to current c
+    if rat >= 1 #if future cost greater than current
+        val = 0 #no adjustment cost (no investment needed to produce at previous cost)
+    else
+        val = log(alph, rat) #find the amount which needs to be invested to achieve future cost
+    end
+    val #return adjustment cost
+end
+
+function obj_func(ct::Float64, ct1::Float64, a::Float64, b::Float64, alph::Float64)
+    q = ((a-ct)/(2b)) #optimal quantity in each period
+    rev = q*(a - b*q - ct) #profit at optimal quantity
+    cost = adj_cost(ct, ct1, alph) #cost of new investment to get to next period cost ct1
+    val = rev - cost #profit net investment cost
+    if val < 0 ## impose condition that investment must be lower than current revenue by giving very low value when it is violated
+        val = -10000
+    end
+    val
+end
+    #@unpack 
+
+function Bellman(prim::Primitives, res::Results, alph::Float64)
+    @unpack \beta, a, b,  c0, c_grid, nc = prim
+    v_new = zeros(nc) #new policy function array
+    for ci=1:nc #loop over cost index 
+        c = c_grid[ci] #find corresponding cost
+        cand_max = -50.0 #start with really bad value for max
+        for i=1:nc #loop over index of next period's cost
+            ct1 = c_grid[i] #find corresponding next period cost
+            val = obj_func(c, ct1, a, b, alph) + \beta*res.val_func[i] #find value of choosing ct1 
+            if val >= cand_max #check if this is better than the previous one; if so, update max candidates and policy function
+                cand_max = val
+                res.pol_func[ci] = ct1
+            end
+        end
+        v_new[ci] = cand_max #fill in value function
+    end
+    v_new #return new value function
+end
+
+
+function model_solver(alpha::Float64)
+    prim = Primitives()
+    @unpack nc, c_grid, c0 = prim
+    val_func, pol_func = zeros(nc), zeros(nc) #init blank value and policy function arrays 
+    res = Results(val_func, pol_func) 
+    tol = 0.0001 #tolerance param for convergence
+    N = 1000 #max iterations
+    n=0 
+    error = 100 #starting error
+    while error > tol && n < N #loop until convergence or max iterations reached
+        n +=1
+        v_new = Bellman(prim, res, alpha) #find new value function
+        error = maximum(abs.(v_new - res.val_func)) #max difference between old value function and new value function
+        println("Iteration ", n, ", error = ", error)
+        res.val_func = v_new #update value function
+    end
+    println("Convergence!")
+
+    #vfplot = plot(c_grid, res.val_func, title="Value") #plot value function
+    #pfplot = plot(c_grid, [c_grid, res.pol_func], labels=[ "45 degree line" "Policy function"],title="Policy", ylims=(0,Int(c0))) #plot policy function and 45 degree line
+    #display(vfplot)
+    #display(pfplot)
+    res.val_func, res.pol_func
+end
+
+
+
+function multiple_plots()
+    @unpack c_grid , \beta = Primitives()
+    alpha_list = [0.5, 0.75, 0.9, 0.95, 0.99, 0.999]
+    #vf_arr = fill([], 5)
+    #pf_arr = fill([], 5)
+    vf_plot = plot()
+    pf_plot = plot(c_grid, c_grid, title="Value function, selected \alpha", xlabel="Cost", ylabel="Next period cost", labels="45 degree line", legend=:topleft)
+    for (i,al) in enumerate(alpha_list)
+        vfa, pfa = model_solver(al)
+        plot!(vf_plot, c_grid, vfa, title="Value function, selected \alpha, \beta = $(\beta)", xlabel="Cost", ylabel="V(c)", labels=al, legend=:bottomleft)
+        plot!(pf_plot, c_grid,  pfa, title="Policy function, selected \alpha, \beta = $(\beta)", xlabel="Cost", ylabel="Next period cost (c')", labels = al, legend=:topleft)
+        #vf_arr[i] = vfa
+        #vf_arr[]
+    end
+    display(vf_plot)
+    display(pf_plot)
+    cd(dirname(@__FILE__())) 
+    savefig(vf_plot, "vfplot beta=$(\beta).png")
+    savefig(pf_plot, "pfplot beta=$(\beta).png")
+end
+
+function cost_evol()
+    #cost evolution
+    alph = 0.95
+    @unpack c_grid, \beta = Primitives()
+    vf, pf = model_solver(alph)
+    
+    ci = 450
+    cs = [c_grid[ci]]
+    vs = [vf[ci]]
+    error = 100
+    while error > 0.01
+        c = c_grid[ci]
+        ct1 = pf[ci]
+        error = c - ct1
+        push!(cs, ct1)
+        ci = findfirst(isequal(ct1), c_grid)
+        push!(vs, vf[ci])
+    end
+    plot_evol = plot(cs, title="Cost evolution with c_0 = 18, \alpha=$(alph), \beta=$(\beta)", xlabel="Time", ylim=(0,20), ylabel="Cost")
+    savefig(plot_evol, "costevol$(\beta).png")
+    #plot(vs)
+end
+        \end{lstlisting}
        \end{sol}
        \end{document}
        
